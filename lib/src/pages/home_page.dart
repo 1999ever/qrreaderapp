@@ -1,11 +1,18 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
-
-// import 'package:qrcode_reader/qrcode_reader.dart';
 import 'package:barcode_scan/barcode_scan.dart';
 
+import 'package:qrreaderapp/src/models/scan_model.dart';
+import 'package:qrreaderapp/src/bloc/scan_bloc.dart';
+
+//esta importación ya no es necesario porque en el archivo db_provider.dart ya lo importe y a su vez lo exporte, este export es con el fin de que cuando yo use el db_provider tambien venga junto a ella el scan_model.dart
+// import 'package:qrreaderapp/src/models/scan_model.dart';
 import 'package:qrreaderapp/src/pages/direcciones_page.dart';
 import 'package:qrreaderapp/src/pages/mapas_page.dart';
+
+import 'package:qrreaderapp/src/utils/utils.dart' as utils;
 
 
 
@@ -17,6 +24,9 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+
+  final scanBloc = new ScansBloc();
+
   ///El index actual esta inicializado con valor 0, pero este va ir cambiando cuando se haga onTap en el BottomNavigationBar.
   int currentIndex = 0;
 
@@ -29,9 +39,7 @@ class _HomePageState extends State<HomePage> {
         actions: <Widget>[
           IconButton(
             icon: Icon(Icons.delete_forever),
-            onPressed: () {
-              
-            },
+            onPressed: scanBloc.borrarScanTodos,
           )
         ],
       ),
@@ -42,29 +50,46 @@ class _HomePageState extends State<HomePage> {
       floatingActionButton: FloatingActionButton(
         backgroundColor: Theme.of(context).primaryColor,
         child: Icon(Icons.filter_center_focus),
-        onPressed: _scanQR,
+      //al precionar en este boton se va ejecutar el metodo que recibe que es el _scanQR
+        onPressed: () => _scanQR(context),//le pasamos por referecia, ya que este se va ejecutar si se hace Tap
       ),
     );
   }
 
+  ///Método que se encarga de lanzar el lector de codigo QR usando el paquete de Barcode Scanner
+  _scanQR(BuildContext context) async {
 
-  _scanQR() async {
-      //https://etvblog.000webhostapp.com
-      //geo:40.72735525448057,-73.79445448359378
-    // String futureString = '';
-    String futureString = '';
-
+    // https://etvblog.000webhostapp.com
+    //geo:-17.800996,-63.153869
+    //En esta varible se va almacenar el valor o resultado del escaneo
+    String futureString;
+ 
     try {
-      // futureString = await new QRCodeReader().scan();
+      //Llamamos el BarcodeScanner que es el que se encarga de mostrar el escaneador de codigo QR
+      //y el resultado que se obtenga despues que escanee se va almacenar en la variable futureString
       futureString = await BarcodeScanner.scan();
     } catch (e) {
       futureString = e.toString();
     }
 
-    print('futureString: $futureString');
+    //Si el resultado del escaneo es diferente a 'FormatException: Invalid envelope' quiere decir que es un escaneo valido, por ende va ejecutar el cuerpo del if.
+    if(futureString != 'FormatException: Invalid envelope') {
+      //dicho valor del escaneo lo pasamos como argumeto al ScanModel para que este haga lo que tiene que hacer y nos devuelva un resultado de tipo ScanModel que se almacenará en la variable scan.
+      final scan = ScanModel(valor: futureString);
+      // DBProvider.db.nuevoScan(scan); Ya no lo uso
+      //el valor del scan lo pasamos como argumento al método agregar scan, este va realizar su trabajo y regresar el reslutado que sera mostraado
+      scanBloc.agregarScan(scan);
 
-    if(futureString != null) {
-      print('TENEMOS INFORMACION');
+      //ahora procedemos ver el resultado real, si es de tipo http entoces se va abrir el navegador y cargar la direccion url
+      //en ios tarda un poco en cerrarse el escaner y abrir la url, entonces ponemos una condicion que si es ios que tarde unos milisegunodos antes de abrir o cargar la pagina web, si no es ios que cargue normal.
+      if(Platform.isIOS) {
+        Future.delayed(Duration(milliseconds: 750), (){
+          utils.abrirScan(context, scan);
+        });
+      } else {//caso contrario como no es ios seria android y abrimos el resultado en el navegado o en el mapa dependiendo del tipo
+        utils.abrirScan(context, scan);
+      }
+      
     }
 
   }
